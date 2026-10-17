@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    @apply bg-paper text-ink font-sans;
+    background-image:
+      radial-gradient(rgba(0,0,0,.025) 1px, transparent 1px);
+    background-size: 3px 3px;
+  }
+  ::selection { @apply bg-ember text-paper; }
+}
+
+@layer components {
+  .rule { @apply border-t border-ink/15; }
+  .hairline { @apply border border-ink/15; }
+  .chip {
+    @apply px-3 py-1 rounded-full text-xs font-medium tracking-wide uppercase
+           border border-ink/20 hover:border-ink transition-colors cursor-pointer;
+  }
+  .chip-active { @apply bg-ink text-paper border-ink; }
+  .btn {
+    @apply px-5 py-2.5 text-sm tracking-wide uppercase border border-ink
+           hover:bg-ink hover:text-paper transition-colors;
+  }
+  .num {
+    @apply font-mono text-[11px] tracking-widest text-ink/40;
+  }
+
+  /* Hide scrollbar but keep scrollable — used by the college list */
+  .no-scrollbar {
+    -ms-overflow-style: none;      /* IE + Edge */
+    scrollbar-width: none;         /* Firefox */
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;                 /* Chrome, Safari, Edge */
+  }
+}
