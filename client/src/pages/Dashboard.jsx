@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
+import { motion, AnimatePresence } from "framer-motion";
 import { loadImpersonation, clearImpersonation } from "../api/impersonate.js";
 import { getEvents, getGlobalCategories } from "../api/events.js";
 import EventCard from "../components/EventCard.jsx";
@@ -8,7 +9,6 @@ import EventModal from "../components/EventModal.jsx";
 import CreateEventPanel from "../components/CreateEventPanel.jsx";
 import Pagination from "../components/Pagination.jsx";
 import DashboardSkeleton from "../components/DashboardSkeleton.jsx";
-import Loader from "../components/Loader.jsx";
 
 const PAGE_SIZE = 10;
 
@@ -17,7 +17,6 @@ export default function Dashboard() {
   const { state: navState } = useLocation();
 
   const [session, setSession] = useState(loadImpersonation());
-
   const [events, setEvents] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -48,11 +47,10 @@ export default function Dashboard() {
       .catch(() => setCategories([]));
   }, []);
 
-  // Load events whenever page / session / refreshKey changes
+  // Load events
   useEffect(() => {
     if (!session) return;
     setLoading(true);
-
     const u = session.user;
     getEvents({
       page,
@@ -80,7 +78,6 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, [session, page, refreshKey]);
 
-  // Aggregate stats from the current page
   const stats = useMemo(() => {
     const totalVolunteers = events.reduce(
       (s, e) => s + (Number(e.total_volunteer) || 0),
@@ -94,7 +91,6 @@ export default function Dashboard() {
   if (!session) return null;
   const u = session.user;
 
-  // Skeleton on the very first fetch
   if (loading && events.length === 0) {
     return <DashboardSkeleton />;
   }
@@ -110,144 +106,130 @@ export default function Dashboard() {
   const rangeEnd = Math.min(page * PAGE_SIZE, total);
 
   return (
-    <div className="min-h-screen">
-      {/* ── Impersonation banner ─────────────────────────────── */}
+    <div className="min-h-screen pb-20">
+      {/* Warning banner */}
       <div className="bg-ember text-paper">
-        <div className="max-w-7xl mx-auto px-6 md:px-10 py-2 flex items-center justify-between text-xs font-mono tracking-widest uppercase">
-          <span>
-            ⚠️ Impersonating {u.first_name} {u.last_name} ({u.email})
-          </span>
-          <button onClick={logout} className="underline hover:no-underline">
+        <div className="max-w-7xl mx-auto px-4 md:px-10 py-2 flex items-center justify-between text-[10px] md:text-xs font-mono tracking-widest uppercase">
+          <span className="truncate pr-4">⚠️ Impersonating {u.first_name} {u.last_name}</span>
+          <button onClick={logout} className="underline hover:no-underline shrink-0">
             Log out
           </button>
         </div>
       </div>
 
-      {/* ── Header ───────────────────────────────────────────── */}
-      <header className="max-w-7xl mx-auto px-6 md:px-10 pt-10 pb-4">
+      {/* Header */}
+      <header className="max-w-7xl mx-auto px-4 md:px-10 pt-6 md:pt-10 pb-2">
         <p className="num">Dashboard</p>
-        <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mt-2">
           <div>
-            <h1 className="font-display text-5xl leading-[0.95] mt-2">
+            <h1 className="font-display text-3xl md:text-5xl leading-[0.95]">
               Welcome, <em className="text-ember">{u.first_name}</em>
             </h1>
-            <p className="mt-3 text-ink/60">
-              {u.role_name} · {u.department_name} · {u.college_name}
+            <p className="mt-2 text-sm md:text-base text-ink/60">
+              {u.role_name} · {u.department_name}
             </p>
           </div>
           <button
             onClick={() => setShowCreate((s) => !s)}
-            className="btn border-ember text-ember hover:bg-ember hover:text-paper"
+            className={`px-4 py-2 text-xs uppercase tracking-widest border transition-colors shrink-0 ${
+              showCreate 
+                ? "bg-ink text-paper border-ink" 
+                : "border-ember text-ember hover:bg-ember hover:text-paper"
+            }`}
           >
-            {showCreate ? "Close" : "+ Create event"}
+            {showCreate ? "Close Form" : "+ Create event"}
           </button>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 md:px-10 py-6">
-        {/* ── Stats ──────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Stat label="Total events" value={total} />
+      <main className="max-w-7xl mx-auto px-4 md:px-10 py-4 md:py-6">
+
+        {/* Animated Create Panel */}
+        <AnimatePresence>
+          {showCreate && (
+            <motion.div
+              initial={{ opacity: 0, height: 0, overflow: "hidden" }}
+              animate={{ opacity: 1, height: "auto", overflow: "visible" }}
+              exit={{ opacity: 0, height: 0, overflow: "hidden" }}
+              transition={{ duration: 0.4, ease: [0.04, 0.62, 0.23, 0.98] }}
+            >
+              <div className="pt-6">
+                <CreateEventPanel
+                  session={session}
+                  collegeId={collegeId}
+                  categories={categories}
+                  onCreated={(res) => {
+                    setShowCreate(false);
+                    setLastCreated(res);
+                    setPage(1);
+                    setRefreshKey((k) => k + 1);
+                  }}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+          <Stat label="Total" value={total} />
           <Stat label="Current" value={stats.current} />
           <Stat label="Upcoming" value={stats.upcoming} />
-          <Stat label="Volunteers (pg)" value={stats.totalVolunteers} />
+          <Stat label="Volunteers" value={stats.totalVolunteers} />
         </div>
 
-        {/* ── Last created card with invite code + QR ───────── */}
+        
+
+        {/* Last Created Card */}
         {lastCreated && (
-          <div className="mt-6 hairline bg-ink text-paper p-5">
-            <div className="grid md:grid-cols-[1fr_auto] gap-5 items-center">
+          <div className="mt-6 hairline bg-ink text-paper p-4 md:p-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <p className="text-[10px] uppercase tracking-widest opacity-70">
                   Last created · Invitation code
                 </p>
-                <p className="font-mono text-3xl tracking-[0.15em] mt-2 break-all">
+                <p className="font-mono text-2xl md:text-3xl tracking-[0.15em] mt-1">
                   {lastCreated.inviteCode || lastCreated.eventID || "—"}
                 </p>
-                <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs opacity-80 font-mono">
-                  <span>Event&nbsp;{lastCreated.eventID}</span>
-                  <span>API&nbsp;{lastCreated.api_eventID}</span>
-                </div>
-                <div className="mt-4 flex gap-2 flex-wrap">
-                  <button
-                    onClick={() =>
-                      navigator.clipboard?.writeText(
-                        String(lastCreated.inviteCode || "")
-                      )
-                    }
-                    className="px-3 py-1.5 text-xs uppercase tracking-widest border border-paper/40 hover:bg-paper hover:text-ink"
-                  >
-                    Copy code
-                  </button>
-                  <button
-                    onClick={() =>
-                      setOpenEvent({
-                        eventTitle: `Event ${lastCreated.eventID}`,
-                        eventID: lastCreated.eventID,
-                        api_eventID: lastCreated.api_eventID,
-                        inviteCode: lastCreated.inviteCode,
-                        event_status: "New",
-                        status_color: "#c2452d",
-                      })
-                    }
-                    className="px-3 py-1.5 text-xs uppercase tracking-widest border border-paper/40 hover:bg-paper hover:text-ink"
-                  >
-                    View details
-                  </button>
+                <div className="mt-2 flex flex-wrap gap-3 text-[10px] font-mono opacity-80">
+                  <span>Event {lastCreated.eventID}</span>
                 </div>
               </div>
-              {lastCreated.inviteCode && (
-                <div className="bg-paper p-3 justify-self-start md:justify-self-end">
-                  <QRCodeSVG
-                    value={String(lastCreated.inviteCode)}
-                    size={116}
-                    bgColor="#fbf7ef"
-                    fgColor="#0e0e10"
-                    level="M"
-                  />
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => navigator.clipboard?.writeText(String(lastCreated.inviteCode || ""))}
+                  className="px-3 py-1.5 text-xs uppercase tracking-widest border border-paper/40 hover:bg-paper hover:text-ink"
+                >
+                  Copy Code
+                </button>
+                {lastCreated.inviteCode && (
+                  <div className="bg-paper p-1.5 hidden sm:block">
+                    <QRCodeSVG value={String(lastCreated.inviteCode)} size={60} bgColor="#fbf7ef" fgColor="#0e0e10" />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* ── Create event panel ───────────────────────────── */}
-        {showCreate && (
-          <CreateEventPanel
-            session={session}
-            collegeId={collegeId}
-            categories={categories}
-            onCreated={(res) => {
-              setShowCreate(false);
-              setLastCreated(res);
-              setPage(1);
-              setRefreshKey((k) => k + 1);
-            }}
-          />
-        )}
-
-        {/* ── Events list ──────────────────────────────────── */}
+        {/* Events List */}
         <section className="mt-10">
-          <div className="flex items-baseline justify-between">
+          <div className="flex items-baseline justify-between mb-4">
             <div>
               <p className="num">Events</p>
-              <h2 className="font-display text-3xl mt-1">My college</h2>
+              <h2 className="font-display text-2xl md:text-3xl">My college</h2>
             </div>
             <p className="num flex items-center gap-2">
-              {loading && (
-                <span className="inline-block w-2 h-2 rounded-full bg-ember animate-pulse" />
-              )}
+              {loading && <span className="w-1.5 h-1.5 rounded-full bg-ember animate-pulse" />}
               {total} total
             </p>
           </div>
-          <hr className="my-6 rule" />
+          <hr className="mb-6 rule" />
 
           {events.length === 0 ? (
-            <div className="hairline bg-cream p-10 text-center">
-              <p className="font-display text-2xl">No events yet</p>
-              <p className="text-sm text-ink/60 mt-2">
-                Create your first event using the button above.
-              </p>
+            <div className="hairline bg-cream p-8 text-center">
+              <p className="font-display text-xl">No events yet</p>
+              <p className="text-sm text-ink/60 mt-1">Create your first event above.</p>
             </div>
           ) : (
             <>
@@ -271,7 +253,7 @@ export default function Dashboard() {
         </section>
       </main>
 
-      {/* ── Event detail modal ──────────────────────────────── */}
+      {/* Event Detail Modal */}
       {openEvent && (
         <EventModal event={openEvent} onClose={() => setOpenEvent(null)} />
       )}
@@ -281,9 +263,11 @@ export default function Dashboard() {
 
 function Stat({ label, value }) {
   return (
-    <div className="hairline bg-cream p-5">
-      <p className="num">{label}</p>
-      <p className="font-display text-4xl mt-1">
+    <div className="hairline bg-cream p-3 md:p-5 flex flex-col justify-center">
+      <p className="text-[9px] md:text-[11px] font-mono tracking-widest uppercase text-ink/50 mb-1 truncate">
+        {label}
+      </p>
+      <p className="font-display text-2xl md:text-4xl leading-none">
         {String(value).padStart(2, "0")}
       </p>
     </div>
