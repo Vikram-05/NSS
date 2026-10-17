@@ -118,7 +118,7 @@ export default function Dashboard() {
       </div>
 
       {/* Header */}
-      <header className="max-w-7xl mx-auto px-4 md:px-10 pt-6 md:pt-10 pb-2">
+      <header className="max-w-7xl mx-auto px-4 md:px-10 pt-6 md:pt-10 pb-0">
         <p className="num">Dashboard</p>
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mt-2">
           <div>
@@ -142,7 +142,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 md:px-10 py-4 md:py-6">
+      <main className="max-w-7xl mx-auto px-4 md:px-10 py-0 md:py-0">
 
         {/* Animated Create Panel */}
         <AnimatePresence>
@@ -153,7 +153,7 @@ export default function Dashboard() {
               exit={{ opacity: 0, height: 0, overflow: "hidden" }}
               transition={{ duration: 0.4, ease: [0.04, 0.62, 0.23, 0.98] }}
             >
-              <div className="pt-6">
+              <div className="pb-1 pt-0">
                 <CreateEventPanel
                   session={session}
                   collegeId={collegeId}
@@ -171,7 +171,7 @@ export default function Dashboard() {
         </AnimatePresence>
         
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 pt-4">
           <Stat label="Total" value={total} />
           <Stat label="Current" value={stats.current} />
           <Stat label="Upcoming" value={stats.upcoming} />
