@@ -4,12 +4,14 @@ import DetailShell from "../components/DetailShell.jsx";
 import KV from "../components/KV.jsx";
 import Loader from "../components/Loader.jsx";
 import ImpersonateButton from "../components/ImpersonateButton.jsx";
+import { impersonateTryLogin, impersonateResetPassword } from "../api/client.js";
 
 export default function PersonDetail() {
   const { id } = useParams();
   const { state } = useLocation();
   const [person, setPerson] = useState(state?.person ?? null);
   const [loading, setLoading] = useState(!state?.person);
+  const [vtuLoading, setVtuLoading] = useState(false);
 
   useEffect(() => {
     if (person) return;
@@ -28,6 +30,9 @@ export default function PersonDetail() {
   const initials = `${person.first_name?.[0] ?? ""}${person.last_name?.[0] ?? ""}`
     .replace(/\s+/g, "")
     .toUpperCase();
+
+  
+
 
   return (
     <DetailShell
@@ -61,9 +66,11 @@ export default function PersonDetail() {
         </div>
       </div>
 
-      {/* Impersonation CTA — hidden unless VITE_ALLOW_IMPERSONATION=true */}
-      <div className="mt-8">
+      {/* Actions Row */}
+      <div className="mt-8 flex flex-wrap items-center gap-3">
         <ImpersonateButton person={person} />
+
+      
       </div>
     </DetailShell>
   );

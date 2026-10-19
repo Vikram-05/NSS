@@ -6,6 +6,7 @@ import {
   getFaculty,
   getStudents,
 } from "../api/client.js";
+import { loadImpersonation } from "../api/impersonate.js";
 import Header from "../components/Header.jsx";
 import CollegeRail from "../components/CollegeRail.jsx";
 import DepartmentTabs from "../components/DepartmentTabs.jsx";
@@ -33,37 +34,66 @@ export default function Home() {
   const [studentLength, setStudentLength] = useState(10);
   const [studentTotal, setStudentTotal] = useState(0);
 
-  // ── NEW: search state + debounce ──────────────────────────────
-  const [studentSearch, setStudentSearch] = useState("");     // input value
-  const [searchTerm, setSearchTerm] = useState("");           // debounced value sent to API
+  const [studentSearch, setStudentSearch] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     const t = setTimeout(() => setSearchTerm(studentSearch.trim()), 350);
     return () => clearTimeout(t);
   }, [studentSearch]);
 
-  // Step 1 — colleges
+  // Wrapper handlers that save to localStorage immediately
+  const handleSelectCollege = (college) => {
+    setActiveCollege(college);
+    localStorage.setItem("vtu_active_college", String(college.id));
+  };
+
+  const handleSelectDept = (dept) => {
+    setActiveDept(dept);
+    localStorage.setItem("vtu_active_dept", String(dept.id_department));
+  };
+
+  // 1. Load colleges and restore saved state
   useEffect(() => {
     getColleges(1).then((res) => {
       const list = res?.data ?? [];
       setColleges(list);
-      if (list.length) setActiveCollege(list[0]);
+      
+      const savedCollegeId = localStorage.getItem("vtu_active_college");
+      const foundCollege = list.find((c) => String(c.id) === savedCollegeId);
+      
+      if (foundCollege) {
+        setActiveCollege(foundCollege);
+      } else if (list.length) {
+        setActiveCollege(list[0]);
+        localStorage.setItem("vtu_active_college", String(list[0].id));
+      }
     });
   }, []);
 
-  // Step 2 — departments
+  // 2. Load departments when college changes
   useEffect(() => {
     if (!activeCollege) return;
     setDepartments([]);
     setActiveDept(null);
+    
     getDepartments(activeCollege.id).then((res) => {
       const list = res?.data ?? [];
       setDepartments(list);
-      if (list.length) setActiveDept(list[0]);
+      
+      const savedDeptId = localStorage.getItem("vtu_active_dept");
+      const foundDept = list.find((d) => String(d.id_department) === savedDeptId);
+      
+      if (foundDept) {
+        setActiveDept(foundDept);
+      } else if (list.length) {
+        setActiveDept(list[0]);
+        localStorage.setItem("vtu_active_dept", String(list[0].id_department));
+      }
     });
   }, [activeCollege]);
 
-  // Step 3 — faculty
+  // 3. Load faculty
   useEffect(() => {
     if (!activeCollege || !activeDept) return;
     setLoadingFaculty(true);
@@ -84,12 +114,12 @@ export default function Home() {
       .finally(() => setLoadingFaculty(false));
   }, [activeCollege, activeDept]);
 
-  // reset page on any filter change (including search)
+  // Reset page on filter change
   useEffect(() => {
     setStudentPage(1);
   }, [activeCollege, activeDept, mentor, studentLength, searchTerm]);
 
-  // Step 4 — students (paginated + search)
+  // 4. Load students
   useEffect(() => {
     if (view !== "students" || !activeCollege || !activeDept) return;
     setLoadingStudents(true);
@@ -97,7 +127,7 @@ export default function Home() {
     const body = {
       page: studentPage,
       length: studentLength,
-      search: searchTerm,                 // ⬅ sent to API
+      search: searchTerm,
       from_date: "",
       to_date: "",
       id_role: 5,
@@ -132,13 +162,16 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
-      <Header count={topCount} />
+      <Header 
+        count={topCount} 
+        user={loadImpersonation()?.user ?? null} 
+      />
 
-      <main className="max-w-7xl mx-auto px-6 md:px-10 pb-24 grid md:grid-cols-[280px_1fr] gap-10">
+      <main className="max-w-7xl mx-auto px-6 md:px-10 pb-24 grid md:grid-cols-[280px_1fr] gap-4 md:gap-10">
         <CollegeRail
           colleges={colleges}
           activeId={activeCollege?.id}
-          onSelect={setActiveCollege}
+          onSelect={handleSelectCollege}
         />
 
         <section className="min-w-0">
@@ -165,7 +198,7 @@ export default function Home() {
                   <DepartmentTabs
                     departments={departments}
                     activeId={activeDept?.id_department}
-                    onSelect={setActiveDept}
+                    onSelect={handleSelectDept}
                   />
                 ) : (
                   <Loader label="Loading departments" />
@@ -178,15 +211,17 @@ export default function Home() {
                 <div className="flex gap-1 hairline bg-cream p-1">
                   <button
                     onClick={() => setView("faculty")}
-                    className={`px-4 py-1.5 text-xs uppercase tracking-widest ${view === "faculty" ? "bg-ink text-paper" : "hover:bg-sand"
-                      }`}
+                    className={`px-4 py-1.5 text-xs uppercase tracking-widest ${
+                      view === "faculty" ? "bg-ink text-paper" : "hover:bg-sand"
+                    }`}
                   >
                     Faculty
                   </button>
                   <button
                     onClick={() => setView("students")}
-                    className={`px-4 py-1.5 text-xs uppercase tracking-widest ${view === "students" ? "bg-ink text-paper" : "hover:bg-sand"
-                      }`}
+                    className={`px-4 py-1.5 text-xs uppercase tracking-widest ${
+                      view === "students" ? "bg-ink text-paper" : "hover:bg-sand"
+                    }`}
                   >
                     Students
                   </button>
@@ -194,7 +229,6 @@ export default function Home() {
 
                 {view === "students" && (
                   <div className="flex items-center gap-2 flex-wrap">
-                    {/* ── NEW: search input ─────────────────── */}
                     <div className="relative hairline bg-cream">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/40 font-mono text-xs">
                         ⌕
@@ -221,7 +255,7 @@ export default function Home() {
                       onChange={(e) => setMentor(e.target.value)}
                       className="hairline bg-cream px-3 py-2 text-sm"
                     >
-                      <option value="">All students</option>
+                      <option value="">All students </option>
                       {faculty.map((f) => (
                         <option key={f.id_adminuser} value={f.id_adminuser}>
                           {f.first_name} {f.last_name} — {f.role_name}
@@ -262,7 +296,6 @@ export default function Home() {
                         <Loader label="Fetching students" />
                       ) : (
                         <>
-                          {/* search context line */}
                           {searchTerm && (
                             <p className="mb-3 text-xs text-ink/60">
                               Showing results for{" "}

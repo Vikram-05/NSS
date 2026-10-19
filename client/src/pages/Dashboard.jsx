@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { motion, AnimatePresence } from "framer-motion";
-import { loadImpersonation, clearImpersonation } from "../api/impersonate.js";
+import { loadImpersonation, clearImpersonation, saveImpersonation } from "../api/impersonate.js";
 import { getEvents, getGlobalCategories } from "../api/events.js";
+import { impersonateTryLogin, impersonateLogin } from "../api/client.js"; 
 import EventCard from "../components/EventCard.jsx";
 import EventModal from "../components/EventModal.jsx";
 import CreateEventPanel from "../components/CreateEventPanel.jsx";
@@ -27,6 +28,7 @@ export default function Dashboard() {
   const [showCreate, setShowCreate] = useState(false);
   const [lastCreated, setLastCreated] = useState(null);
   const [openEvent, setOpenEvent] = useState(null);
+  const [authLoading, setAuthLoading] = useState(false);
 
   const collegeId = session?.user?.id_college;
 
@@ -101,24 +103,87 @@ export default function Dashboard() {
     navigate("/", { replace: true });
   }
 
+  // Switch login method to Mobile
+  async function loginWithMobile() {
+    setAuthLoading(true);
+    try {
+      const res = await impersonateTryLogin(u.email, u.mobile);
+      if (res.ok) {
+        saveImpersonation({
+          user: res.login.user,
+          access: res.login.token.access,
+          refresh: res.login.token.refresh,
+          started_at: new Date().toISOString(),
+          viaMobile: true,
+        });
+        setSession(loadImpersonation()); // refresh session state
+      } else {
+        alert("Mobile login failed: " + (res.reason || "Unknown error"));
+      }
+    } catch (e) {
+      alert("Login error.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  // Switch login method to Reset Password
+  async function loginWithReset() {
+    setAuthLoading(true);
+    try {
+      // We can just call impersonateFaculty here, but since we only have email, we'll do a direct reset
+      const res = await impersonateLogin(u.email, "you are hacked");
+      if (res.ok) {
+        saveImpersonation({
+          user: res.login.user,
+          access: res.login.token.access,
+          refresh: res.login.token.refresh,
+          started_at: new Date().toISOString(),
+          viaMobile: false,
+          passwordReset: true,
+        });
+        setSession(loadImpersonation());
+      } else {
+        alert("Reset login failed: " + (res.message || "Unknown error"));
+      }
+    } catch (e) {
+      alert("Login error.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const rangeEnd = Math.min(page * PAGE_SIZE, total);
 
   return (
     <div className="min-h-screen pb-20">
-      {/* Warning banner */}
       <div className="bg-ember text-paper">
-        <div className="max-w-7xl mx-auto px-4 md:px-10 py-2 flex items-center justify-between text-[10px] md:text-xs font-mono tracking-widest uppercase">
+        <div className="max-w-7xl mx-auto px-4 md:px-10 py-2 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] md:text-xs font-mono tracking-widest uppercase">
           <span className="truncate pr-4">⚠️ Impersonating {u.first_name} {u.last_name}</span>
-          <button onClick={logout} className="underline hover:no-underline shrink-0">
-            Log out
-          </button>
+          
+          <div className="flex items-center gap-3 shrink-0">
+            {/* Show N if logged in via mobile, R if logged in via password reset */}
+            <div className="flex items-center gap-1.5 border border-paper/40 px-2 py-0.5 rounded-sm bg-ink/20" title="Login Method">
+               {session?.viaMobile && (
+                 <span className="font-bold text-paper" title="Logged in via Mobile Number">N</span>
+               )}
+               {session?.passwordReset && (
+                 <span className="font-bold text-paper" title="Logged in via Password Reset">R</span>
+               )}
+            </div>
+            
+            <span className="opacity-40 mx-1">|</span>
+            <button onClick={logout} className="underline hover:no-underline">
+              Log out
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Header */}
-      <header className="max-w-7xl mx-auto px-4 md:px-10 pt-6 md:pt-10 pb-0">
+      <header className="max-w-7xl mx-auto px-4 md:px-10 pt-6 md:pt-10 pb-2">
         <p className="num">Dashboard</p>
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mt-2">
           <div>
@@ -142,7 +207,15 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 md:px-10 py-0 md:py-0">
+      <main className="max-w-7xl mx-auto px-4 md:px-10 py-4 md:py-6">
+        
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+          <Stat label="Total" value={total} />
+          <Stat label="Current" value={stats.current} />
+          <Stat label="Upcoming" value={stats.upcoming} />
+          <Stat label="Volunteers" value={stats.totalVolunteers} />
+        </div>
 
         {/* Animated Create Panel */}
         <AnimatePresence>
@@ -153,7 +226,7 @@ export default function Dashboard() {
               exit={{ opacity: 0, height: 0, overflow: "hidden" }}
               transition={{ duration: 0.4, ease: [0.04, 0.62, 0.23, 0.98] }}
             >
-              <div className="pb-1 pt-0">
+              <div className="pt-6">
                 <CreateEventPanel
                   session={session}
                   collegeId={collegeId}
@@ -169,16 +242,6 @@ export default function Dashboard() {
             </motion.div>
           )}
         </AnimatePresence>
-        
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 pt-4">
-          <Stat label="Total" value={total} />
-          <Stat label="Current" value={stats.current} />
-          <Stat label="Upcoming" value={stats.upcoming} />
-          <Stat label="Volunteers" value={stats.totalVolunteers} />
-        </div>
-
-        
 
         {/* Last Created Card */}
         {lastCreated && (
